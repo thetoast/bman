@@ -1,6 +1,7 @@
 #!/usr/bin/env pythone
 import sys
 import os
+import traceback
 from optparse import OptionParser
 
 from bundle import HgBundle, GitBundle
@@ -31,9 +32,7 @@ def load_tracking_data(bundles, bundle_types):
                 bundle.tracked = True
                 bundle.saved_revision = revision
                 if bundle.url != url:
-                    print "Updating bundle url for", name
-                    print "\t", bundle.url, " -> ", url
-                    bundle.url = url
+                    pass # XXX: do something here?
 
 
 def scan_repositories(bundle_types, repos=None):
@@ -58,8 +57,8 @@ if __name__ == "__main__":
     bundle_types = {"git" : (".git", GitBundle), "hg" : (".hg", HgBundle)}
 
     # create a console
-    from ui import Win32Console
-    console = Win32Console()
+    from ui import Console
+    console = Console()
 
     # usage is handy
     usage = "%prog <command> [args]\n\nCommands:\n"
@@ -90,4 +89,16 @@ if __name__ == "__main__":
     try:
         commands.execute(command, console, bundles, options, args)
     except BManError, e:
-        print "BManError:", e
+        console.write("BManError: ")
+        console.write_line(e, color="red")
+        if options.verbose:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            for line in traceback.format_tb(exc_traceback):
+                console.write_line(line, color="yellow")
+    except:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        console.write("UnknownError: ")
+        console.write_line(exc_value, color="red")
+        if options.verbose:
+            for line in traceback.format_tb(exc_traceback):
+                console.write_line(line, color="yellow")

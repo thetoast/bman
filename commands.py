@@ -40,8 +40,6 @@ def list_all(console, bundles, options, args):
             if bundle.head != bundle.saved_revision:
                 console.write(" MODIFIED", "yellow")
 
-        print bundle.saved_revision,"-",bundle.head,"-",bundle.tip
-
         console.write_line()
 
 
@@ -118,7 +116,7 @@ def add(console, bundles, options, args):
             raise BManError("Bundle %s not found" % (name))
 
         if not bundle.tracked:
-            print "Adding bundle", name
+            console.write_line("Adding bundle: %s" % (name))
             with open('.bundles', 'a') as fd:
                 fd.write('%s %s %s %s\n' % (bundle.name, bundle.vcs, bundle.url, bundle.head))
 
@@ -140,7 +138,7 @@ def remove(console, bundles, options, args):
         for line in lines:
             name = line.split(' ')[0]
             if name in names:
-                print "Removing bundle", name
+                console.write_line("Removing bundle: %s" % (name))
             else:
                 fd.write(line)
 

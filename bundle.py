@@ -138,7 +138,7 @@ class GitBundle(Bundle):
     def get_tip(self):
         os.chdir(self.name)
         try:
-            p = Popen(['git', 'log','-n1', 'master', '--format=%H'], stdout=PIPE, shell=True)
+            p = Popen(['git', 'log','-n1', 'origin/master', '--format=%H'], stdout=PIPE, shell=True)
             tip = p.communicate()[0].strip()
         except Exception, e:
             raise BundleError(e)
@@ -157,7 +157,7 @@ class GitBundle(Bundle):
 
         os.chdir(self.name)
         try:
-            p = Popen(['git', 'update', revision], stdout=PIPE)
+            p = Popen(['git', 'merge', '--ff-only', 'origin/master'], stdout=PIPE)
             result = p.communicate()[0].strip()
         except Exception, e:
             raise BundleError(e)
