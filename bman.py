@@ -1,125 +1,12 @@
+#!/usr/bin/env pythone
 import sys
 import os
-from subprocess import Popen, PIPE
-from ConfigParser import SafeConfigParser, NoSectionError
 from optparse import OptionParser
+
+from bundle import HgBundle, GitBundle
 
 class BManError(Exception): pass
 class BundleError(BManError): pass
-
-class Bundle(object):
-    def __init__(self, repo, url="", scan=True):
-        self.repo = repo
-        self.tracked=False
-        self.saved_revision=""
-        self.head=""
-        self.tip=""
-        self.status="unknown"
-        self.url=url
-
-        if scan:
-            self.scan()
-
-    def scan(self):
-        self.url = self.get_url()
-        self.head = self.get_head()
-        self.tip = self.get_tip()
-
-    def get_url(self):
-        return ""
-
-    def get_head(self, verbose=False):
-        return ""
-
-    def get_tip(self, verbose=False):
-        return ""
-
-    def pull(self, verbose=False):
-        pass
-
-    def update(self, verbose=False):
-        pass
-
-    def __str__(self):
-        return "%s-%s-%s-%s-%s-%s-%s-%s" % (self.repo, type(self), self.tracked, self.saved_revision, self.head, self.tip, self.status, self.url)
-
-    def __repr__(self):
-        return self.__str__()
-
-
-
-class HgBundle(Bundle):
-    def get_url(self):
-        config = SafeConfigParser()
-        config.read('%s/.hg/hgrc' % (self.repo))
-
-        try:
-            section = dict(config.items('paths'))
-
-            try:
-                self.url = section['default.pull']
-            except KeyError: pass
-
-            url = section['default']
-        except KeyError:
-            raise BundleError("Unable to determine bundle url for %s" % (self.repo))
-        except NoSectionError:
-            raise BundleError("Unable to determine bundle url for %s" % (self.repo))
-
-        return url
-
-    def get_head(self):
-        p = Popen(['hg', '-R', self.repo, 'parent','--template={node}'], stdout=PIPE)
-        head = p.communicate()[0].strip()
-
-        return head
-
-    def get_tip(self):
-        p = Popen(['hg', '-R', self.repo, 'log', '-r', 'tip', '-l1', '--template={node}'], stdout=PIPE)
-        tip = p.communicate()[0].strip()
-
-        return tip
-
-
-class GitBundle(Bundle):
-    def get_url(self):
-        os.chdir(self.repo)
-        try:
-            p = Popen(['git', 'config','remote.origin.url'], stdout=PIPE, shell=True)
-            url = p.communicate()[0].strip()
-            p.wait()
-        except Exception, e:
-            raise BundleError(e)
-        finally:
-            os.chdir('..')
-
-        return url
-
-    def get_head(self):
-        os.chdir(self.repo)
-        try:
-            p = Popen(['git', 'log','-n1', 'HEAD', '--format=%H'], stdout=PIPE, shell=True)
-            head = p.communicate()[0].strip()
-            p.wait()
-        except Exception, e:
-            raise BundleError(e)
-        finally:
-            os.chdir('..')
-
-        return head
-
-    def get_tip(self):
-        os.chdir(self.repo)
-        try:
-            p = Popen(['git', 'log','-n1', 'master', '--format=%H'], stdout=PIPE, shell=True)
-            tip = p.communicate()[0].strip()
-            p.wait()
-        except Exception, e:
-            raise BundleError(e)
-        finally:
-            os.chdir('..')
-
-        return tip
 
 
 def load_tracking_data(bundles, bundle_types):
@@ -131,54 +18,109 @@ def load_tracking_data(bundles, bundle_types):
                 if len(parts) != 4:
                     raise BundleError("Invalid .bundles entry: %s" % (line))
 
-                repo, bundle_type, url, revision = parts
+                name, bundle_type, url, revision = parts
                 bundle = None
                 try:
-                    bundle = bundles[repo]
+                    bundle = bundles[name]
                 except KeyError:
                     try:
-                        bundle = bundle_types[bundle_type][1](repo, url)
+                        bundle = bundle_types[bundle_type][1](name, url)
                     except KeyError:
                         raise BundleError("Unknown bundle type:", bundle_type)
 
                 bundle.tracked = True
                 bundle.saved_revision = revision
                 if bundle.url != url:
-                    print "Updating bundle url for", repo
+                    print "Updating bundle url for", name
                     print "\t", bundle.url, " -> ", url
                     bundle.url = url
 
 
-def scan_repositories(bundle_types):
+def scan_repositories(bundle_types, repos=None):
     bundles = {}
 
-    for repo in os.listdir('.'):
-        if os.path.isdir(repo):
+    if not repos:
+        names = os.listdir('.')
+
+    for name in names:
+        if os.path.isdir(name):
             for dir_name, bundle_type in bundle_types.values():
-                if os.path.isdir(os.path.join(repo, dir_name)):
-                    bundles[repo] = bundle_type(repo)
+                if os.path.isdir(os.path.join(name, dir_name)):
+                    bundles[name] = bundle_type(name)
 
 
     return bundles
 
 
-def list_(bundles, options, args):
+def list_(console, bundles, options, args):
+    maxname = max(len(name) for name in bundles.keys())
+    for name, bundle in bundles.items():
+        console.write("%s" % (name), "red")
+        if bundle.tracked:
+            console.write("* ")
+        else:
+            console.write("  ")
+        console.write(" "*(maxname - len(name)))
+        console.write("%s " % (bundle.head), "yellow")
+        console.write("%s " % (bundle.url), "magenta")
+        console.write("\n")
+
+def heads(console, bundles, options, args):
     pass
-def heads(bundles, options, args):
+def detail(console, bundles, options, args):
     pass
-def detail(bundles, options, args):
+def urls(console, bundles, options, args):
     pass
-def urls(bundles, options, args):
+
+
+
+def add(console, bundles, options, args):
+    if len(args) == 0 and not options.all:
+        raise BManError("No bundles specified")
+
+    if options.all:
+        names = bundles.keys()
+    else:
+        names = args
+
+    for name in names:
+        try:
+            bundle = bundles[name]
+        except KeyError:
+            raise BManError("Bundle %s not found" % (name))
+
+        if not bundle.tracked:
+            print "Adding bundle", name
+            with open('.bundles', 'a') as fd:
+                fd.write('%s %s %s %s\n' % (bundle.name, bundle.vcs, bundle.url, bundle.head))
+
+
+def remove(console, bundles, options, args):
+    if len(args) == 0 and not options.all:
+        raise BManError("No bundles specified")
+
+    if options.all:
+        names = bundles.keys()
+    else:
+        names = args
+
+    with open('.bundles', 'r+') as fd:
+        lines = fd.readlines()
+        fd.seek(0)
+        fd.truncate()
+        for line in lines:
+            name = line.split(' ')[0]
+            if name in names:
+                print "Removing bundle", name
+            else:
+                fd.write(line)
+
+
+def pull(console, bundles, options, args):
     pass
-def add(bundles, options, args):
+def update(console, bundles, options, args):
     pass
-def remove(bundles, options, args):
-    pass
-def pull(bundles, options, args):
-    pass
-def update(bundles, options, args):
-    pass
-def init(bundles, options, args):
+def init(console, bundles, options, args):
     pass
 
 usage = """ %prog <command> [args]
@@ -211,8 +153,12 @@ if __name__ == "__main__":
     bundles = {}
     bundle_types = {"git" : (".git", GitBundle), "hg" : (".hg", HgBundle)}
 
+    from ui import Win32Console
+    console = Win32Console()
+
     parser = OptionParser(usage=usage, version="%prog 0.1")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", default=False)
+    parser.add_option("-a", "--all", dest="all", action="store_true", default=False)
 
     if len(sys.argv) < 2:
         parser.print_help()
@@ -231,4 +177,7 @@ if __name__ == "__main__":
     load_tracking_data(bundles, bundle_types)
 
 
-    valid_commands[command](bundles, options, args)
+    try:
+        valid_commands[command](console, bundles, options, args)
+    except BManError, e:
+        print "BManError:", e
