@@ -4,12 +4,16 @@ class CommandError(BManError): pass
 
 command_list = {}
 
-def export(func, name=None):
-    if not name:
-        name = func.__name__
+def export(name_or_method=None):
+    if callable(name_or_method):
+        command_list[name_or_method.__name__] = name_or_method
+        return name_or_method
+    else:
+        def real_decorator(func):
+            command_list[name_or_method] = func
+            return func
 
-    command_list[name] = func
-    return func
+        return real_decorator
 
 def execute(command, console, bundles, options, args):
     try:
@@ -18,17 +22,25 @@ def execute(command, console, bundles, options, args):
         raise CommandError("No such command: %s" % (command))
 
 
-@export
+@export("list")
 def list_all(console, bundles, options, args):
+    maxname = max(len(name) for name in bundles.keys())
     console.write_line("Listing all bundles:")
     for name, bundle in bundles.items():
         console.write("\t%s" % (name), "white")
+        console.write(" " * (maxname - len(name) + 1))
 
         if not bundle.installed:
             console.write(" MISSING", "red")
-
-        if not bundle.tracked:
+        elif not bundle.tracked:
             console.write(" UNTRACKED", "red")
+        else:
+            if bundle.head != bundle.tip:
+                console.write(" OUT-OF-DATE", "yellow")
+            if bundle.head != bundle.saved_revision:
+                console.write(" MODIFIED", "yellow")
+
+        print bundle.saved_revision,"-",bundle.head,"-",bundle.tip
 
         console.write_line()
 
@@ -138,7 +150,7 @@ def pull(console, bundles, options, args):
     if len(args) > 0:
         names = args
     else:
-        names = bundles.names
+        names = bundles.keys()
 
     for name in names:
         bundle = bundles[name]
@@ -149,10 +161,43 @@ def pull(console, bundles, options, args):
 
 
 @export
-def update(console, bundles, options, args):
-    pass
+def init(console, bundles, options, args):
+    if len(args) > 0:
+        names = args
+    else:
+        names = bundles.keys()
+
+    for name in names:
+        bundle = bundles[name]
+        if bundle.tracked and not bundle.installed:
+            console.write_line("Initializing bundle: %s" % (name))
+            result = bundle.init()
+
+            if options.verbose:
+                console.write_line(result, color="yellow")
+                console.write_line();
+                console.write_line();
+            options.revision = bundle.saved_revision
+            update(console, bundles, options, args)
+            
 
 
 @export
-def init(console, bundles, options, args):
-    pass
+def update(console, bundles, options, args):
+    if len(args) > 0:
+        names = args
+    else:
+        names = bundles.keys()
+
+    for name in names:
+        bundle = bundles[name]
+        if options.revision:
+            revision = options.revision
+        else:
+            revision = bundle.tip
+        console.write_line("Updating bundle %s to revision %s" % (name, revision))
+
+        result = bundle.update(revision)
+
+        if options.verbose:
+            console.write_line(result, color="yellow")

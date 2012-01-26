@@ -31,16 +31,19 @@ class Bundle(object):
     def get_url(self):
         return ""
 
-    def get_head(self, verbose=False):
+    def get_head(self):
         return ""
 
-    def get_tip(self, verbose=False):
+    def get_tip(self):
         return ""
 
-    def pull(self, verbose=False):
+    def pull(self):
         pass
 
-    def update(self, verbose=False):
+    def update(self):
+        pass
+
+    def init(self):
         pass
 
     def __str__(self):
@@ -87,6 +90,21 @@ class HgBundle(Bundle):
 
         return tip
 
+    def init(self):
+        p = Popen(['hg', 'clone', self.url, self.name], stdout=PIPE)
+        return p.communicate()[0].strip()
+
+    def pull(self):
+        p = Popen(['hg', '-R', self.name, 'pull'], stdout=PIPE)
+        return p.communicate()[0].strip()
+
+    def update(self, revision):
+        if not revision:
+            raise BundleError("invalid revision")
+
+        p = Popen(['hg', '-R', self.name, 'update', '-r', revision], stdout=PIPE)
+        return p.communicate()[0].strip()
+
 
 class GitBundle(Bundle):
     def __init__(self, *args, **kwargs):
@@ -98,7 +116,6 @@ class GitBundle(Bundle):
         try:
             p = Popen(['git', 'config','remote.origin.url'], stdout=PIPE, shell=True)
             url = p.communicate()[0].strip()
-            p.wait()
         except Exception, e:
             raise BundleError(e)
         finally:
@@ -111,7 +128,6 @@ class GitBundle(Bundle):
         try:
             p = Popen(['git', 'log','-n1', 'HEAD', '--format=%H'], stdout=PIPE, shell=True)
             head = p.communicate()[0].strip()
-            p.wait()
         except Exception, e:
             raise BundleError(e)
         finally:
@@ -124,10 +140,40 @@ class GitBundle(Bundle):
         try:
             p = Popen(['git', 'log','-n1', 'master', '--format=%H'], stdout=PIPE, shell=True)
             tip = p.communicate()[0].strip()
-            p.wait()
         except Exception, e:
             raise BundleError(e)
         finally:
             os.chdir('..')
 
         return tip
+
+    def init(self):
+        p = Popen(['git', 'clone', self.url, self.name], stdout=PIPE)
+        return p.communicate()[0].strip()
+
+    def update(self):
+        if not revision:
+            raise BundleError("invalid revision")
+
+        os.chdir(self.name)
+        try:
+            p = Popen(['git', 'update', revision], stdout=PIPE)
+            result = p.communicate()[0].strip()
+        except Exception, e:
+            raise BundleError(e)
+        finally:
+            os.chdir('..')
+
+        return result
+
+    def pull(self):
+        os.chdir(self.name)
+        try:
+            p = Popen(['git', 'fetch'], stdout=PIPE)
+            result = p.communicate()[0].strip()
+        except Exception, e:
+            raise BundleError(e)
+        finally:
+            os.chdir('..')
+
+        return result

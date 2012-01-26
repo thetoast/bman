@@ -70,7 +70,9 @@ if __name__ == "__main__":
     # parse args
     parser = OptionParser(usage=usage, version="%prog 0.1")
     parser.add_option("-v", "--verbose", dest="verbose", action="store_true", default=False)
-    parser.add_option("-a", "--all", dest="all", action="store_true", default=False)
+    parser.add_option("-a", "--all", help="operate on all bundles", dest="all", action="store_true", default=False)
+    parser.add_option("-r", "--revision", help="operate on a particular revision", dest="revision", default=None)
+    parser.add_option("-l", "--limit", help="limit output to a number of items", dest="limit", default=None)
 
     if len(sys.argv) < 2:
         parser.print_help()
