@@ -1,0 +1,1 @@
+class BManError(Exception): pass

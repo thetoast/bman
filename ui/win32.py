@@ -3,7 +3,7 @@ from ctypes.wintypes import SHORT, WORD, DWORD
 from win32console import *
 
 from console import Console
-from bman import BManError
+from errors import BManError
 
 
 class COORD(Structure):
