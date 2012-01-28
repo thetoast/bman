@@ -80,15 +80,11 @@ class HgBundle(Bundle):
 
     def get_head(self):
         p = Popen(['hg', '-R', self.name, 'parent','--template={node}'], stdout=PIPE)
-        head = p.communicate()[0].strip()
-
-        return head
+        return p.communicate()[0].strip()
 
     def get_tip(self):
         p = Popen(['hg', '-R', self.name, 'log', '-r', 'tip', '-l1', '--template={node}'], stdout=PIPE)
-        tip = p.communicate()[0].strip()
-
-        return tip
+        return p.communicate()[0].strip()
 
     def init(self):
         p = Popen(['hg', 'clone', self.url, self.name], stdout=PIPE)
@@ -102,9 +98,8 @@ class HgBundle(Bundle):
         if not revision:
             raise BundleError("invalid revision")
 
-        p = Popen(['hg', '-R', self.name, 'update', '-r', revision], stdout=PIPE)
-        return p.communicate()[0].strip()
-
+        p = Popen(['hg', '-R', self.name, 'update', '-r', revision])
+        p.wait()
 
 class GitBundle(Bundle):
     def __init__(self, *args, **kwargs):
@@ -151,14 +146,14 @@ class GitBundle(Bundle):
         p = Popen(['git', 'clone', self.url, self.name], stdout=PIPE)
         return p.communicate()[0].strip()
 
-    def update(self):
+    def update(self, revision):
         if not revision:
             raise BundleError("invalid revision")
 
         os.chdir(self.name)
         try:
-            p = Popen(['git', 'merge', '--ff-only', 'origin/master'], stdout=PIPE)
-            result = p.communicate()[0].strip()
+            p = Popen(['git', 'merge', '--ff-only', revision], shell=True)
+            p.wait()
         except Exception, e:
             raise BundleError(e)
         finally:
@@ -169,7 +164,7 @@ class GitBundle(Bundle):
     def pull(self):
         os.chdir(self.name)
         try:
-            p = Popen(['git', 'fetch'], stdout=PIPE)
+            p = Popen(['git', 'fetch'], stdout=PIPE, shell=True)
             result = p.communicate()[0].strip()
         except Exception, e:
             raise BundleError(e)

@@ -3,14 +3,25 @@ from errors import BManError
 class CommandError(BManError): pass
 
 command_list = {}
+command_help = {}
 
-def export(name_or_method=None):
+def export(name_or_method=None, help=None):
     if callable(name_or_method):
-        command_list[name_or_method.__name__] = name_or_method
-        return name_or_method
+        method = name_or_method
+
+        command_list[method.__name__] = method
+        command_help[method.__name__] = ""
+
+        return method
     else:
         def real_decorator(func):
-            command_list[name_or_method] = func
+            name = name_or_method
+            if not name:
+                name = func.__name__
+
+            command_list[name] = func
+            command_help[name] = help
+
             return func
 
         return real_decorator
@@ -22,7 +33,7 @@ def execute(command, console, bundles, options, args):
         raise CommandError("No such command: %s" % (command))
 
 
-@export("list")
+@export("list", "lists all bundles that bman is aware of")
 def list_all(console, bundles, options, args):
     maxname = max(len(name) for name in bundles.keys())
     console.write_line("Listing all bundles:")
@@ -43,7 +54,7 @@ def list_all(console, bundles, options, args):
         console.write_line()
 
 
-@export
+@export(help="lists all currently tracked bundles")
 def tracked(console, bundles, options, args):
     console.write_line("Tracked bundles:")
     for name, bundle in bundles.items():
@@ -56,7 +67,7 @@ def tracked(console, bundles, options, args):
         console.write_line()
 
 
-@export
+@export(help="displays head revision for all bundles")
 def heads(console, bundles, options, args):
     maxname = max(len(name) for name in bundles.keys())
     for name, bundle in bundles.items():
@@ -70,7 +81,7 @@ def heads(console, bundles, options, args):
         console.write("\n")
 
 
-@export
+@export(help="shows a more detailed description for all bundles")
 def detail(console, bundles, options, args):
     maxname = max(len(name) for name in bundles.keys())
     for name, bundle in bundles.items():
@@ -85,7 +96,7 @@ def detail(console, bundles, options, args):
         console.write("\n")
 
 
-@export
+@export(help="shows urls for all bundles")
 def urls(console, bundles, options, args):
     maxname = max(len(name) for name in bundles.keys())
     for name, bundle in bundles.items():
@@ -99,7 +110,7 @@ def urls(console, bundles, options, args):
         console.write("\n")
 
 
-@export
+@export(help="tells bman to start tracking one or more bundles")
 def add(console, bundles, options, args):
     if len(args) == 0 and not options.all:
         raise BManError("No bundles specified")
@@ -121,7 +132,7 @@ def add(console, bundles, options, args):
                 fd.write('%s %s %s %s\n' % (bundle.name, bundle.vcs, bundle.url, bundle.head))
 
 
-@export
+@export(help="tells bman to stop tracking one or more bundles")
 def remove(console, bundles, options, args):
     if len(args) == 0 and not options.all:
         raise BManError("No bundles specified")
@@ -143,7 +154,7 @@ def remove(console, bundles, options, args):
                 fd.write(line)
 
 
-@export
+@export(help="pulls changesets from remote servers for listed or all tracked bundles")
 def pull(console, bundles, options, args):
     if len(args) > 0:
         names = args
@@ -155,10 +166,12 @@ def pull(console, bundles, options, args):
 
         if bundle.installed:
             console.write_line("Pulling bundle: %s" % (bundle.name))
-            bundle.pull()
+            result = bundle.pull()
+            if options.verbose:
+                console.write_line(result, color="yellow")
 
 
-@export
+@export(help="initializes bundles which are tracked but not installed")
 def init(console, bundles, options, args):
     if len(args) > 0:
         names = args
@@ -177,10 +190,9 @@ def init(console, bundles, options, args):
                 console.write_line();
             options.revision = bundle.saved_revision
             update(console, bundles, options, args)
-            
 
 
-@export
+@export(help="updates bundles to the specified or latest revision")
 def update(console, bundles, options, args):
     if len(args) > 0:
         names = args
@@ -194,8 +206,31 @@ def update(console, bundles, options, args):
         else:
             revision = bundle.tip
         console.write_line("Updating bundle %s to revision %s" % (name, revision))
-
+        console.save_color()
+        console.set_color("yellow")
         result = bundle.update(revision)
+        console.restore_color()
 
         if options.verbose:
             console.write_line(result, color="yellow")
+
+@export(help="updates tracking file with current heads")
+def save(console, bundles, options, args):
+    if len(args) > 0:
+        names = args
+    else:
+        names = bundles.keys()
+
+    with open('.bundles', 'r+') as fd:
+        lines = fd.readlines()
+        fd.seek(0)
+        fd.truncate()
+        for line in lines:
+            name = line.split(' ')[0]
+            bundle = bundles[name]
+
+            if (name in names) and (bundle.head != bundle.saved_revision):
+                console.write_line("Saving bundle: %s" % (name))
+                fd.write('%s %s %s %s\n' % (bundle.name, bundle.vcs, bundle.url, bundle.head))
+            else:
+                fd.write(line)

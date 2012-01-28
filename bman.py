@@ -63,7 +63,7 @@ if __name__ == "__main__":
     # usage is handy
     usage = "%prog <command> [args]\n\nCommands:\n"
     for name in sorted(commands.command_list.keys()):
-        usage += "\t%s\n" % (name)
+        usage += "\t%s%s%s\n" % (name, " "*(16-len(name)), commands.command_help[name])
 
 
     # parse args
